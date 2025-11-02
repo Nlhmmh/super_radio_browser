@@ -10,6 +10,7 @@ import {
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
   ScrollView,
   StyleSheet,
   TextInput,
@@ -20,7 +21,7 @@ import { ThemedView } from "./themed-view";
 
 export const SimpleRadioBrowser = () => {
   const theme = useTheme();
-  const styles = createStyles(theme);
+  const styles = createStyles();
 
   const player = useAudioPlayer(undefined);
   const playerStatus = useAudioPlayerStatus(player);
@@ -103,13 +104,14 @@ export const SimpleRadioBrowser = () => {
   return (
     <ThemedView style={styles.container}>
       <ThemedView style={styles.inputContainer}>
-        <Ionicons name="search" size={24} />
+        <Ionicons name="search" size={24} color={theme.colors.text} />
         <TextInput
           style={styles.input}
           placeholder="Search stations here...."
           value={searchTerm}
           onChangeText={(v) => setSearchTerm(v)}
-        ></TextInput>
+          placeholderTextColor={theme.colors.text}
+        />
       </ThemedView>
 
       <ThemedView style={[styles.container, styles.alignCenter]}>
@@ -173,25 +175,26 @@ export const SimpleRadioBrowser = () => {
 };
 
 const StationCard = ({ station }) => {
-  const theme = useTheme();
-  const styles = createStyles(theme);
+  const styles = createStyles();
   return (
     <ThemedView style={styles.stationCard}>
       <ThemedText style={styles.stationName}>
-        {truncateString(station.name, 15)}
+        {truncateString(station.name, 10)}
       </ThemedText>
       <ThemedText style={styles.stationInfo}>
-        {station.country} | {station.language}
+        {truncateString(station.country, 10)}
       </ThemedText>
       <ThemedText style={styles.stationInfo}>
-        clicks:{station.clickcount} | votes: {station.votes}
+        {truncateString(station.language, 10)}
       </ThemedText>
     </ThemedView>
   );
 };
 
-export const createStyles = (theme: Theme) =>
-  StyleSheet.create({
+export const createStyles = () => {
+  const theme = useTheme();
+  const window = Dimensions.get("window");
+  return StyleSheet.create({
     container: {
       flex: 1,
       gap: 20,
@@ -214,6 +217,7 @@ export const createStyles = (theme: Theme) =>
       flex: 1,
       height: 50,
       flexDirection: "row",
+      color: theme.colors.text,
     },
     loadingContainer: {
       gap: 20,
@@ -228,13 +232,14 @@ export const createStyles = (theme: Theme) =>
       alignItems: "center",
       flexWrap: "wrap",
       gap: 15,
-      paddingBottom: 100,
+      paddingTop: 10,
+      paddingBottom: 150,
     },
     stationCard: {
       backgroundColor: theme.colors.card,
       alignItems: "center",
       justifyContent: "center",
-      width: 180,
+      width: window.width / 2.3,
       borderRadius: 10,
       padding: 10,
       gap: 5,
@@ -301,3 +306,4 @@ export const createStyles = (theme: Theme) =>
       fontWeight: "bold",
     },
   });
+};

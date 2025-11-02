@@ -1,8 +1,8 @@
 import { DarkTheme, LightTheme } from "@/constants/theme/theme";
 import { ThemeProvider } from "@/constants/theme/themeContext";
+import { useColorScheme } from "@/hooks/use-color-scheme.web";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useColorScheme } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 export default function RootLayout() {
@@ -11,7 +11,7 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ThemeProvider currentTheme={theme}>
-        <StatusBar style={colorScheme} />
+        <StatusBar style="auto" />
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         </Stack>
