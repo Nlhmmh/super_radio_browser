@@ -14,13 +14,17 @@ a: ## yarn android
 w: ## yarn android
 	npm run web
 
-a-build-expo:
+a-build-deploy-android:
 	eas build -p android --profile production
 
-a-build-local:
+a-build-android:
 	eas build -p android --local
 
+a-build-deploy-web:
+	eas deploy --prod
+
 a-build-web:
+	eas deploy --prod
 	npx expo export -p web
 	cp -rf ./dist/. ./docs
 	cp docs/index.html docs/404.html
