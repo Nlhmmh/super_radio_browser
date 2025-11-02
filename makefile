@@ -19,3 +19,8 @@ a-build-expo:
 
 a-build-local:
 	eas build -p android --local
+
+a-build-web:
+	npx expo export -p web
+	cp -rf ./dist/. ./docs
+	cp docs/index.html docs/404.html
