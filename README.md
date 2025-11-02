@@ -15,3 +15,7 @@ This is a hobby project to listen radio stations with app.
    ```bash
    make run
    ```
+
+## Others
+- https://docs.expo.dev/guides/icons/
+- https://icons.expo.fyi/Index

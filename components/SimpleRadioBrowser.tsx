@@ -1,165 +1,303 @@
 import { useTheme } from "@/constants/theme/themeContext";
+import { searchStations } from "@/service/radio_stations";
 import { truncateString } from "@/ts/utils";
-import { createAudioPlayer } from "expo-audio";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import {
+  setAudioModeAsync,
+  useAudioPlayer,
+  useAudioPlayerStatus,
+} from "expo-audio";
 import React, { useCallback, useEffect, useState } from "react";
-import { Platform, TouchableOpacity } from "react-native";
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+} from "react-native";
 import { ThemedText } from "./themed-text";
 import { ThemedView } from "./themed-view";
 
 export const SimpleRadioBrowser = () => {
   const theme = useTheme();
+  const styles = createStyles(theme);
+
+  const player = useAudioPlayer(undefined);
+  const playerStatus = useAudioPlayerStatus(player);
   const [stations, setStations] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("cherry");
+  const [searchTerm, setSearchTerm] = useState("");
   const [currentStation, setCurrentStation] = useState(undefined);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState(undefined);
+  const [isFirstLoaded, setIsFirstLoaded] = useState(false);
 
-  const fetchStations = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const API_URL = "https://de1.api.radio-browser.info/json/stations/search";
-      const limit = 10;
-      const countryCode = "MM";
-      let url = `${API_URL}?countrycode=${countryCode}&limit=${limit}&hidebroken=true&order=votes&reverse=true`;
-      // url += `&name=${searchTerm}`
-      const resp = await fetch(url);
-      if (!resp.ok) return;
-      const stations = await resp.json();
-      if (!stations) return;
-      for (const station of stations) {
-        if (station.url_resolved) {
-          station.player = createAudioPlayer(station.url_resolved);
-        }
+  useEffect(() => {
+    if (!currentStation) return;
+    player.replace(currentStation.url_resolved);
+  }, [currentStation]);
+
+  useEffect(() => {
+    async function configureAudioMode() {
+      try {
+        await setAudioModeAsync({
+          allowsRecording: false,
+          shouldPlayInBackground: true,
+          playsInSilentMode: true,
+          shouldRouteThroughEarpiece: false,
+          interruptionModeIOS: "doNotMix",
+          interruptionModeAndroid: "doNotMix",
+        });
+      } catch (error) {
+        console.error(error);
       }
+    }
+    configureAudioMode();
+  }, []);
+
+  const fetchStations = useCallback(async (searchTerm, countryCode) => {
+    setLoading(true);
+    setError(undefined);
+    try {
+      const stations = await searchStations(searchTerm, countryCode);
       setStations(stations);
     } catch (error) {
       console.error(error);
-      setError(
-        "Could not load radio stations. Please check the network or API."
-      );
+      setError("Could not load radio stations.");
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchStations();
-  }, [fetchStations]);
+    if (!isFirstLoaded) {
+      fetchStations(searchTerm, "MM");
+      setIsFirstLoaded(true);
+      return;
+    }
+    fetchStations(searchTerm);
+  }, [searchTerm]);
 
-  const onPress = () => {
-    const player = station.player;
-    if (!player.isLoaded) return;
+  const onSelStations = async (station) => {
+    setError(undefined);
+    if (!station || !station.url_resolved) {
+      console.error("Invalid station: ", station);
+      setError("Invalid station!");
+      return;
+    }
     if (player.playing) {
       player.pause();
-      setCurrentStation(undefined);
-      return;
     }
     setCurrentStation(station);
     player.play();
   };
 
-  if (loading) {
-    return (
-      <ThemedView
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      >
-        <ThemedText>Loading...</ThemedText>
-      </ThemedView>
-    );
-  }
+  const togglePlayPause = async () => {
+    if (!currentStation) return;
+    if (player.playing) {
+      await player.pause();
+      return;
+    }
+    await player.play();
+  };
+
   return (
-    <ThemedView
-      style={{
-        flex: 1,
-        flexDirection: "row",
-        justifyContent: "center",
-        alignItems: "center",
-        flexWrap: "wrap",
-        gap: 10,
-      }}
-    >
-      {stations.map((station) => {
-        return (
-          <StationCard
-            key={station.stationuuid}
-            station={station}
-            currentStation={currentStation}
-            setCurrentStation={setCurrentStation}
-          />
-        );
-      })}
+    <ThemedView style={styles.container}>
+      <ThemedView style={styles.inputContainer}>
+        <Ionicons name="search" size={24} />
+        <TextInput
+          style={styles.input}
+          placeholder="Search stations here...."
+          value={searchTerm}
+          onChangeText={(v) => setSearchTerm(v)}
+        ></TextInput>
+      </ThemedView>
+
+      <ThemedView style={[styles.container, styles.alignCenter]}>
+        {loading ? (
+          <ThemedView style={styles.loadingContainer}>
+            <ThemedText>Loading Radio Stations...</ThemedText>
+            <ActivityIndicator size="large" color="#4a90e2" />
+          </ThemedView>
+        ) : error ? (
+          <ThemedText style={styles.error}>{error}</ThemedText>
+        ) : (
+          <ScrollView>
+            <ThemedView style={styles.stationsContainer}>
+              {stations.map((station) => {
+                return (
+                  <TouchableOpacity
+                    style={[
+                      currentStation?.stationuuid == station.stationuuid &&
+                        styles.selStationCard,
+                    ]}
+                    activeOpacity={0.8}
+                    key={station.stationuuid}
+                    onPress={() => onSelStations(station)}
+                  >
+                    <StationCard station={station} />
+                  </TouchableOpacity>
+                );
+              })}
+            </ThemedView>
+          </ScrollView>
+        )}
+      </ThemedView>
+
+      {/* Controls */}
+      <ThemedView style={styles.controls}>
+        <ThemedText style={styles.nowPlaying}>
+          {currentStation
+            ? `Now Playing: ${currentStation.name}`
+            : "Select a Station"}
+        </ThemedText>
+        <TouchableOpacity
+          style={[
+            styles.controlButton,
+            !currentStation && styles.disabledButton,
+          ]}
+          onPress={togglePlayPause}
+          disabled={!currentStation}
+          activeOpacity={!currentStation ? 1 : 0.7}
+        >
+          {playerStatus.isBuffering ? (
+            <ActivityIndicator size="small" color="white" />
+          ) : (
+            <ThemedText style={styles.buttonText}>
+              {player.playing ? "⏸ PAUSE" : "▶ PLAY"}
+            </ThemedText>
+          )}
+        </TouchableOpacity>
+      </ThemedView>
     </ThemedView>
   );
 };
 
-const StationCard = ({ station, currentStation, setCurrentStation }) => {
+const StationCard = ({ station }) => {
   const theme = useTheme();
+  const styles = createStyles(theme);
   return (
-    <ThemedView
-      style={{
-        backgroundColor: theme.colors.card,
-        alignItems: "center",
-        justifyContent: "center",
-        width: 180,
-        borderRadius: 10,
-        padding: 10,
-        gap: 5,
-        ...Platform.select({
-          ios: {
-            shadowColor: theme.shadow,
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 5,
-          },
-          android: {
-            elevation: 5,
-          },
-        }),
-      }}
-    >
-      <TouchableOpacity
-        style={{
-          width: 100,
-          alignItems: "center",
-          backgroundColor: theme.buttonBackground,
-          padding: 10,
-          borderRadius: 10,
-          opacity:
-            station.stationuuid != currentStation?.stationuuid &&
-            currentStation?.player?.playing
-              ? 0.7
-              : 1,
-        }}
-        disabled={
-          station.stationuuid != currentStation?.stationuuid &&
-          currentStation?.player?.playing
-        }
-        onPress={() => {
-          const player = station.player;
-          if (!player.isLoaded) return;
-          if (player.playing) {
-            player.pause();
-            setCurrentStation(undefined);
-            return;
-          }
-          setCurrentStation(station);
-          player.play();
-        }}
-      >
-        <ThemedText
-          style={{
-            color: theme.buttonText,
-          }}
-        >
-          {station.player.playing ? "Pause" : "Play"}
-        </ThemedText>
-      </TouchableOpacity>
-      <ThemedText>{truncateString(station.name)}</ThemedText>
+    <ThemedView style={styles.stationCard}>
+      <ThemedText style={styles.stationName}>
+        {truncateString(station.name, 15)}
+      </ThemedText>
+      <ThemedText style={styles.stationInfo}>
+        {station.country} | {station.language}
+      </ThemedText>
+      <ThemedText style={styles.stationInfo}>
+        clicks:{station.clickcount} | votes: {station.votes}
+      </ThemedText>
     </ThemedView>
   );
 };
+
+export const createStyles = (theme: Theme) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      gap: 20,
+    },
+    alignCenter: {
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    inputContainer: {
+      flexDirection: "row",
+      marginHorizontal: 15,
+      borderWidth: 1,
+      borderColor: "gray",
+      borderRadius: 10,
+      paddingHorizontal: 10,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    input: {
+      flex: 1,
+      height: 50,
+      flexDirection: "row",
+    },
+    loadingContainer: {
+      gap: 20,
+    },
+    error: {
+      color: "red",
+    },
+    stationsContainer: {
+      display: "flex",
+      flexDirection: "row",
+      justifyContent: "center",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: 15,
+      paddingBottom: 100,
+    },
+    stationCard: {
+      backgroundColor: theme.colors.card,
+      alignItems: "center",
+      justifyContent: "center",
+      width: 180,
+      borderRadius: 10,
+      padding: 10,
+      gap: 5,
+      shadowColor: theme.shadow,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 5,
+      elevation: 5,
+    },
+    selStationCard: {
+      borderWidth: 1,
+      borderColor: "lightblue",
+      borderRadius: 10,
+      shadowColor: "blue",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 5,
+      elevation: 5,
+    },
+    stationName: {
+      fontSize: 16,
+      fontWeight: "600",
+    },
+    stationInfo: {
+      fontSize: 12,
+    },
+    controls: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingVertical: 10,
+      gap: 10,
+      borderTopWidth: 1,
+      borderLeftWidth: 1,
+      borderRightWidth: 1,
+      borderColor: "gray",
+      borderRadius: 10,
+    },
+    nowPlaying: {
+      fontSize: 16,
+      fontWeight: "500",
+    },
+    controlButton: {
+      backgroundColor: theme.buttonBackground,
+      paddingVertical: 15,
+      paddingHorizontal: 30,
+      borderRadius: 20,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 3,
+      elevation: 5,
+    },
+    disabledButton: {
+      backgroundColor: "#A0A0A0",
+      opacity: 0.6,
+    },
+    buttonText: {
+      color: theme.buttonText,
+      fontSize: 18,
+      fontWeight: "bold",
+    },
+  });
